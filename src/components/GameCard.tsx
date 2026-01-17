@@ -29,7 +29,7 @@ const GameCard = ({ game, index = 0, showCartButton = true }: GameCardProps) => 
   
   // 이미지 로드 실패 시 대체 이미지
   const imageUrl = imageError 
-    ? `https://via.placeholder.com/800x1200/1a1a1a/ffffff?text=${encodeURIComponent(game.title)}`
+    ? `https://placehold.co/800x1200/1a1a1a/ffffff?text=${encodeURIComponent(game.title)}`
     : game.coverImage;
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {

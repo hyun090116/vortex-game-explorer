@@ -23,7 +23,7 @@ const HeroSection = () => {
   const isOwned = isPurchased(featuredGame.id, featuredGame.title);
   
   const imageUrl = imageError 
-    ? `https://via.placeholder.com/1920x1080/1a1a1a/ffffff?text=${encodeURIComponent(featuredGame.title)}`
+    ? `https://placehold.co/1920x1080/1a1a1a/ffffff?text=${encodeURIComponent(featuredGame.title)}`
     : featuredGame.coverImage;
 
   const handleBuyNow = async () => {
