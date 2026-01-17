@@ -1,21 +1,13 @@
 import { loadTossPayments } from "@tosspayments/sdk";
 
-const FALLBACK_CLIENT_KEY = "test_ck_KNbdOvk5rkWX19R4L5Knrn07xlzm";
-
-const clientKey =
-  import.meta.env.VITE_TOSS_CLIENT_KEY?.trim() || FALLBACK_CLIENT_KEY;
+const CLIENT_KEY = "test_ck_KNbdOvk5rkWX19R4L5Knrn07xlzm";
 
 let tossPaymentsPromise: ReturnType<typeof loadTossPayments> | null = null;
 
 const getTossPayments = () => {
-  if (!clientKey) {
-    throw new Error("토스페이먼츠 클라이언트 키가 설정되지 않았습니다.");
-  }
-
   if (!tossPaymentsPromise) {
-    tossPaymentsPromise = loadTossPayments(clientKey);
+    tossPaymentsPromise = loadTossPayments(CLIENT_KEY);
   }
-
   return tossPaymentsPromise;
 };
 
@@ -25,28 +17,18 @@ interface RequestPaymentOptions {
   orderId?: string;
   customerName?: string;
   customerEmail?: string;
-  successUrl?: string;
-  failUrl?: string;
 }
 
 const buildOrderId = () => {
-  const random =
-    typeof globalThis.crypto !== "undefined" &&
-    "randomUUID" in globalThis.crypto &&
-    typeof globalThis.crypto.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : Math.random().toString(36).slice(2, 10);
-  return `VORTEX-${Date.now()}-${random}`;
+  return `VORTEX-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 };
 
-export const requestTossPayment = async ({
+export const requestPayment = async ({
   amount,
   orderName,
   orderId,
   customerEmail,
   customerName,
-  successUrl,
-  failUrl,
 }: RequestPaymentOptions) => {
   if (amount <= 0) {
     throw new Error("결제 금액이 올바르지 않습니다.");
@@ -61,9 +43,8 @@ export const requestTossPayment = async ({
     orderName,
     customerEmail,
     customerName,
-    successUrl: successUrl || `${baseUrl}/payment/success`,
-    failUrl: failUrl || `${baseUrl}/payment/fail`,
+    successUrl: `${baseUrl}/payment/success`,
+    failUrl: `${baseUrl}/payment/fail`,
   });
 };
-
 

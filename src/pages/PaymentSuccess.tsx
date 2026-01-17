@@ -1,121 +1,86 @@
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Loader2, AlertTriangle } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 
-const DEFAULT_FUNCTION_URL =
-  import.meta.env.VITE_SUPABASE_FUNCTION_URL?.replace(/\/$/, "") ||
-  "https://qqmcbmpuexduxglvhcvu.functions.supabase.co";
-
-type ConfirmStatus = "idle" | "loading" | "success" | "error";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://qqmcbmpuexduxglvhcvu.supabase.co";
+const FUNCTION_URL = SUPABASE_URL.replace(".supabase.co", ".functions.supabase.co") + "/payments";
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { clearCart } = useCart();
   const { user } = useAuth();
+  const processedRef = useRef(false);
 
   const paymentKey = searchParams.get("paymentKey");
   const orderId = searchParams.get("orderId");
-  const amountParam = searchParams.get("amount");
-  const amount = useMemo(
-    () => (amountParam ? Number(amountParam) : undefined),
-    [amountParam],
-  );
-
-  const [confirmStatus, setConfirmStatus] = useState<ConfirmStatus>("idle");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const amount = searchParams.get("amount");
 
   useEffect(() => {
-    if (!paymentKey || !orderId || !amount) {
-      setErrorMessage("결제 정보가 누락되었습니다. 다시 시도해주세요.");
-      setConfirmStatus("error");
+    if (!paymentKey || !orderId || !amount || !user?.id || processedRef.current) {
       return;
     }
 
-    let isMounted = true;
+    processedRef.current = true;
 
     const confirmPayment = async () => {
-      setConfirmStatus("loading");
-      setErrorMessage(null);
-
       try {
-        const response = await fetch(`${DEFAULT_FUNCTION_URL}/approve-payment`, {
+        // sessionStorage에서 게임 정보 복원
+        const storedGameInfos = sessionStorage.getItem("pending_gameInfos");
+        if (!storedGameInfos) {
+          console.error("게임 정보를 찾을 수 없습니다.");
+          return;
+        }
+
+        const gameInfos = JSON.parse(storedGameInfos);
+
+        // Supabase 세션에서 토큰 가져오기
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+
+        // 토큰이 있으면 Authorization 헤더 추가
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
+        }
+
+        const response = await fetch(FUNCTION_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers,
           body: JSON.stringify({
             paymentKey,
             orderId,
-            amount,
-            customerEmail: user?.email,
-            customerName:
-              (user?.user_metadata as { full_name?: string } | undefined)
-                ?.full_name ?? user?.email,
+            amount: Number(amount),
+            userId: user.id,
+            gameInfos,
+            customerEmail: user.email,
+            customerName: user.email,
           }),
         });
 
-        if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({}));
-          throw new Error(
-            errorBody?.message ||
-              "결제 승인을 완료할 수 없습니다. 관리자에게 문의해주세요.",
-          );
+        if (response.ok) {
+          clearCart();
+          sessionStorage.removeItem("pending_gameInfos");
+        } else {
+          const errorData = await response.json();
+          console.error("결제 승인 실패:", errorData);
         }
-
-        if (!isMounted) return;
-
-        setConfirmStatus("success");
-        clearCart();
       } catch (error) {
-        if (!isMounted) return;
-        setConfirmStatus("error");
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "결제 승인 처리 중 오류가 발생했습니다.",
-        );
+        console.error("결제 처리 오류:", error);
       }
     };
 
     confirmPayment();
-
-    return () => {
-      isMounted = false;
-    };
   }, [paymentKey, orderId, amount, user, clearCart]);
-
-  const renderStatusMessage = () => {
-    if (confirmStatus === "loading") {
-      return (
-        <div className="mt-6 inline-flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          결제 승인 처리 중입니다...
-        </div>
-      );
-    }
-
-    if (confirmStatus === "error" && errorMessage) {
-      return (
-        <div className="mt-6 flex flex-col items-center gap-2 text-center">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-            <AlertTriangle className="h-8 w-8 text-destructive" />
-          </div>
-          <p className="text-destructive font-medium">{errorMessage}</p>
-          <Button variant="outline" onClick={() => navigate(-1)}>
-            이전 페이지로 돌아가기
-          </Button>
-        </div>
-      );
-    }
-
-    return null;
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -129,28 +94,16 @@ const PaymentSuccess = () => {
             결제가 완료되었습니다
           </h1>
           <p className="mb-6 text-muted-foreground">
-            주문 번호 {orderId || "-"} / 결제 금액{" "}
-            {amount ? new Intl.NumberFormat("ko-KR").format(amount) + "원" : "-"}
+            주문 번호: {orderId || "-"}
+            <br />
+            결제 금액: {amount ? new Intl.NumberFormat("ko-KR").format(Number(amount)) + "원" : "-"}
           </p>
-
-          {renderStatusMessage()}
-
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button
-              variant="neon"
-              size="lg"
-              onClick={() => navigate("/library")}
-              disabled={confirmStatus === "loading"}
-            >
+          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Button variant="neon" size="lg" onClick={() => navigate("/library")}>
               라이브러리로 이동
             </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => navigate("/")}
-              disabled={confirmStatus === "loading"}
-            >
-              홈으로 돌아가기
+            <Button variant="outline" size="lg" onClick={() => navigate("/")}>
+              홈으로
             </Button>
           </div>
         </div>

@@ -22,18 +22,14 @@ const PaymentFail = () => {
           <h1 className="mb-4 font-display text-4xl font-bold text-destructive">
             결제가 실패했습니다
           </h1>
-          <p className="mb-2 text-muted-foreground">
-            오류 코드: {code || "-"}
-          </p>
-          <p className="mb-6 text-muted-foreground">
-            {message || "다시 시도해주세요."}
-          </p>
+          <p className="mb-2 text-muted-foreground">오류 코드: {code || "-"}</p>
+          <p className="mb-6 text-muted-foreground">{message || "다시 시도해주세요."}</p>
           <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button variant="neon" size="lg" onClick={() => navigate("/")}>
-              홈으로 돌아가기
+              홈으로
             </Button>
             <Button variant="outline" size="lg" onClick={() => navigate(-1)}>
-              이전 페이지로 이동
+              이전 페이지로
             </Button>
           </div>
         </div>
@@ -44,5 +40,4 @@ const PaymentFail = () => {
 };
 
 export default PaymentFail;
-
 

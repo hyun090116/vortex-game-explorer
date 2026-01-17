@@ -1,4 +1,4 @@
-import { Play, Plus, Star, CheckCircle2, ShoppingBag, Loader2 } from "lucide-react";
+import { Play, Plus, Star, CheckCircle2, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -6,7 +6,7 @@ import { useCart } from "@/contexts/CartContext";
 import { usePurchasedGames } from "@/hooks/usePurchasedGames";
 import { featuredGame } from "@/data/games";
 import { useAuth } from "@/contexts/AuthContext";
-import { requestTossPayment } from "@/lib/tossPayments";
+import { requestPayment } from "@/lib/tossPayments";
 
 const formatPrice = (price: number) => {
   return new Intl.NumberFormat('ko-KR').format(price) + '원';
@@ -18,7 +18,7 @@ const HeroSection = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [imageError, setImageError] = useState(false);
-  const [isRequestingPayment, setIsRequestingPayment] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const isInCart = cartItems.some(item => item.id === featuredGame.id);
   const isOwned = isPurchased(featuredGame.id, featuredGame.title);
   
@@ -32,28 +32,38 @@ const HeroSection = () => {
       return;
     }
 
-    if (isRequestingPayment) return;
+    if (isProcessing) return;
 
-    setIsRequestingPayment(true);
+    setIsProcessing(true);
     try {
-      await requestTossPayment({
+      // 게임 정보를 sessionStorage에 저장
+      sessionStorage.setItem(
+        "pending_gameInfos",
+        JSON.stringify([
+          {
+            title: featuredGame.title,
+            developer: featuredGame.developer,
+            description: featuredGame.description,
+            coverImage: featuredGame.coverImage,
+            releaseDate: featuredGame.releaseDate,
+            genre: featuredGame.genre,
+            rating: featuredGame.rating,
+            price: featuredGame.price,
+          },
+        ])
+      );
+
+      await requestPayment({
         amount: featuredGame.price,
         orderName: featuredGame.title,
         customerEmail: user.email ?? undefined,
-        customerName:
-          (user.user_metadata as { full_name?: string } | undefined)?.full_name ??
-          user.email ??
-          undefined,
+        customerName: user.email ?? undefined,
       });
     } catch (error) {
-      console.error("토스 결제 호출 실패:", error);
-      const fallbackMessage =
-        error instanceof Error
-          ? error.message
-          : "결제창을 열 수 없습니다. 잠시 후 다시 시도해주세요.";
-      alert(fallbackMessage);
+      console.error("결제 호출 실패:", error);
+      alert(error instanceof Error ? error.message : "결제창을 열 수 없습니다.");
     } finally {
-      setIsRequestingPayment(false);
+      setIsProcessing(false);
     }
   };
 
@@ -180,25 +190,18 @@ const HeroSection = () => {
               </Button>
             )}
 
-            <Button
-              variant="default"
-              size="xl"
-              className="gap-3"
-              onClick={handleBuyNow}
-              disabled={isRequestingPayment || featuredGame.price <= 0}
-            >
-              {isRequestingPayment ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  결제창 여는 중...
-                </>
-              ) : (
-                <>
-                  <ShoppingBag className="w-5 h-5" />
-                  구매하기
-                </>
-              )}
-            </Button>
+            {!isOwned && (
+              <Button
+                variant="default"
+                size="xl"
+                className="gap-3"
+                onClick={handleBuyNow}
+                disabled={isProcessing}
+              >
+                <ShoppingBag className="w-5 h-5" />
+                {isProcessing ? "처리 중..." : "구매하기"}
+              </Button>
+            )}
 
             <Button variant="outline" size="xl" className="gap-3">
               <Play className="w-5 h-5" />

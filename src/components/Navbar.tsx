@@ -1,9 +1,10 @@
-import { Search, ShoppingCart, User, Menu, X, Trash2, LogOut, Loader2 } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, X, Trash2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { requestPayment } from "@/lib/tossPayments";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +21,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { requestTossPayment } from "@/lib/tossPayments";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -46,39 +46,45 @@ const Navbar = () => {
       return;
     }
 
-    if (cartItems.length === 0) {
+    if (cartItems.length === 0 || isProcessing) {
       return;
     }
 
     const totalAmount = getTotalPrice();
     if (totalAmount <= 0) {
-      alert("결제 가능한 금액이 없습니다.");
       return;
     }
 
-    const orderName =
-      cartItems.length > 1
-        ? `${cartItems[0].title} 외 ${cartItems.length - 1}건`
-        : cartItems[0].title;
-
     setIsProcessing(true);
     try {
-      await requestTossPayment({
+      // 장바구니의 모든 게임 정보 저장
+      const gameInfos = cartItems.map((item) => ({
+        title: item.title,
+        developer: item.developer,
+        description: item.description,
+        coverImage: item.coverImage,
+        releaseDate: item.releaseDate,
+        genre: item.genre,
+        rating: item.rating,
+        price: item.price,
+      }));
+
+      sessionStorage.setItem("pending_gameInfos", JSON.stringify(gameInfos));
+
+      const orderName =
+        cartItems.length > 1
+          ? `${cartItems[0].title} 외 ${cartItems.length - 1}건`
+          : cartItems[0].title;
+
+      await requestPayment({
         amount: totalAmount,
         orderName,
         customerEmail: user.email ?? undefined,
-        customerName:
-          (user.user_metadata as { full_name?: string } | undefined)?.full_name ??
-          user.email ??
-          undefined,
+        customerName: user.email ?? undefined,
       });
     } catch (error) {
-      console.error("토스 결제 호출 실패:", error);
-      const fallbackMessage =
-        error instanceof Error
-          ? error.message
-          : "결제창을 열 수 없습니다. 잠시 후 다시 시도해주세요.";
-      alert(fallbackMessage);
+      console.error("결제 호출 실패:", error);
+      alert(error instanceof Error ? error.message : "결제창을 열 수 없습니다.");
     } finally {
       setIsProcessing(false);
     }
@@ -200,14 +206,7 @@ const Navbar = () => {
                           onClick={handleCheckout}
                           disabled={isProcessing || cartItems.length === 0}
                         >
-                          {isProcessing ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              결제창 여는 중...
-                            </>
-                          ) : (
-                            '구매하기'
-                          )}
+                          {isProcessing ? "처리 중..." : "구매하기"}
                         </Button>
                       </div>
                     </>
